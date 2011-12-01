@@ -1,100 +1,174 @@
-(ns quartz-clj.core)
+(ns quartz-clj.core
+  (:import [org.quartz JobBuilder]))
 
-(def *scheduler* (.getScheduler (org.quartz.impl.StdSchedulerFactory.)))
+(def ^:dynamic *scheduler* (atom nil))
 
-;; private support functions
+;; PRIVATE: Handle options
 
-(defn- extract-function-name [string]
-  (.substring string (inc (.lastIndexOf string "."))))
-
-(defn- job-name [name]
-  (str "job-name-" name))
-
-(defn- job-group [name]
-  (str "job-group-" name))
-
-(defn- trigger-name [name]
-  (str "trigger-name-" name))
-
-(defn- trigger-group [name]
-  (str "trigger-group-" name))
-
-(defn- make-job-detail [name classname]
-  (let [detail (org.quartz.JobDetail. (job-name name) (job-group name) classname)]
-    (doto detail
-      (.setRequestsRecovery false))))
-
-(defn- make-simple-trigger [name start end repeat interval]
-  (org.quartz.SimpleTrigger. (trigger-name name) (trigger-group name) (job-name name) (job-group name) start end repeat interval))
-
-(defn- make-cron-trigger [name cron-expression]
-  (org.quartz.CronTrigger. (trigger-name name) (trigger-group name) (job-name name) (job-group name) cron-expression))
+(defn- configure-job [job [option value]]
+  (case option
+	:recovery (.requestRecovery job value)
+	:durably (.storeDurably job value)
+	:description (.withDescription job value)
+	true (throw (java.lang.Error. (format "Unrecognized job option %s" option)))))
 
 
-(defn- add-job [detail trigger]
-  (let [trigger-name (.getName trigger)
-        trigger-group (.getGroup trigger)
-        old-trigger (.getTrigger *scheduler* trigger-name trigger-group)]
-    (.addJob *scheduler* detail true)
-    (if (nil? old-trigger)
-      (.scheduleJob *scheduler* trigger)
-      (.rescheduleJob *scheduler* trigger-name trigger-group trigger))))
+(defn- configure-simple-schedule [sched [option value]]
+  (case option
+	:repeat (.withRepeatCount sched value)
+	:hours (.withIntervalInHours sched value)
+	:minutes (.withIntervalInMinutes sched value)
+	:seconds (.withIntervalInSeconds sched value)
+	:forever (.repeatForever sched)
+	true (throw (java.lang.Error. (format "Unrecognized schedule option %s" option)))))
 
-(defn- create-job* [name _class trigger datamap]
-  (let [detail (make-job-detail name _class)]
-    (if datamap
-      (.setJobDataMap detail datamap))
-    (add-job detail trigger)))
+(defn- configure-trigger [trig [option value]]
+  (case option
+	:description (.withDescription trig value)
+	:priority (.withPriority trig value)
+	:schedule (.withSchedule trig value)
+	:start (.startAt trig value)
+	:end (.endAt trig value)
+	true (throw (java.lang.Error. (format "Unrecognized trigger option %s" option)))))
 
-;; public user functions
+(defn- as-clojure-key [key]
+  [(.getName key) (.getGroup key)])
 
-(defn create-interval-job [name _class start end repeat interval & [datamap]]
-  (let [trigger (make-simple-trigger name start end repeat interval)]
-    (create-job* name _class trigger datamap)))
+(defn- as-job-key 
+  "Clojure task names can be formatted as pairs [name group] => group.name or
+   singletons name => DEFAULT.name"
+  [name]
+  (if (sequential? name)
+    (let [[name group] name]
+      (org.quartz.JobKey/jobKey name group))
+    (org.quartz.JobKey/jobKey name)))
 
-(defn create-cron-job [name _class cron & [datamap]]
-  (let [trigger (make-cron-trigger name cron)]
-    (create-job* name _class trigger datamap)))
+(defn- as-trigger-key 
+  "Clojure task names can be formatted as pairs [name group] => group.name or
+   singletons name => DEFAULT.name"
+  [name]
+  (if (sequential? name)
+    (let [[name group] name]
+      (org.quartz.TriggerKey/triggerKey name group))
+    (org.quartz.TriggerKey/triggerKey name)))
 
-(defn remove-job [name]
-  (let [job-name (job-name name)
-        job-group (job-group name)]
-    (if-let [job-detail (.getJobDetail *scheduler* job-name job-group)]
-      (.deleteJob *scheduler* job-name job-group))))
+;; PUBLIC: Work with scheduler
 
 (defn start []
-  (doto *scheduler*
+  (when @*scheduler*
+    (throw (java.lang.Error. "Scheduler already active")))
+  (swap! *scheduler*
+	 (fn [old]
+	   (.getScheduler (org.quartz.impl.StdSchedulerFactory.))))
+  (doto @*scheduler*
     (.start)))
 
 (defn pause []
-  (doto *scheduler*
-    (.pauseAll)))
+  (if @*scheduler*
+    (doto @*scheduler*
+      (.pauseAll))
+    (throw (java.lang.Error. "Scheduler not started"))))
 
 (defn resume []
-  (doto *scheduler*
-    (.resumeAll)))
+  (if @*scheduler*
+    (doto @*scheduler*
+      (.resumeAll))
+    (throw (java.lang.Error. "Scheduler not started or not paused"))))
 
 (defn shutdown []
-  (doto *scheduler*
-    (.shutdown)))
+  (when @*scheduler*
+    (doto @*scheduler*
+      (.shutdown))
+    (swap! *scheduler* (fn [old] nil))))
+
+(defn all-groups []
+  (seq (.getJobGroupNames @*scheduler*)))
+
+(defn group-jobs [groupname]
+  (map as-clojure-key
+       (.getJobKeys @*scheduler* (org.quartz.impl.matchers.GroupMatcher/jobGroupEquals groupname))))
+
+(defn all-jobs []
+  (mapcat group-jobs (all-groups)))
+
+(defn job-detail [name]
+  (.getJobDetail @*scheduler* (as-job-key name)))
+
+(defn job-class [name]
+  (.getJobClass (job-detail name)))
+
+(defn job-data [name]
+  (.getJobDataMap (job-detail name)))
+
+(defn remove-job [name]
+  (let [key (as-job-key name)]
+    (if-let [job-detail (.getJobDetail @*scheduler* key)]
+      (.deleteJob @*scheduler* key))))
+
+;; PUBLIC: Low Level Public Interface
+
+(defn create-job [name class & {:as options}]
+  (let [job (org.quartz.JobBuilder/newJob class)]
+    (.withIdentity job (as-job-key name))
+    (dorun (map (partial configure-job job) options))
+    (.build job)))
+
+(defn simple-schedule [& {:as options}]
+  (let [sched (org.quartz.SimpleScheduleBuilder/simpleSchedule)]
+    (dorun (map (partial configure-simple-schedule sched) options))
+    sched))
+
+(defn cron-schedule [expr & {:as options}]
+  (let [sched (org.quartz.CronScheduleBuilder/cronSchedule expr)]
+    (when-let [tz (:tz options)]
+      (.cronSchedule sched tz))
+    sched))
+
+(defn create-trigger [name & {:as options}]
+  (let [trigger (org.quartz.TriggerBuilder/newTrigger)]
+    (.withIdentity trigger (as-trigger-key name))
+    (dorun (map (partial configure-trigger trigger) options))
+    (.build trigger)))
+
+(defn schedule-job [job trigger]
+  (.scheduleJob @*scheduler* job trigger))
+
+;;
+;; PUBLIC: High Level Interface (and examples of using low-level API)
+;;
+
+(defn schedule-task [name class schedule & {:as options}]
+  (schedule-job
+   (create-job name class)
+   (apply create-trigger name
+	  (flatten
+	   (seq (assoc options
+		  :schedule schedule
+		  :start (or (:start options) (java.util.Date.))))))))
+  
+(defn schedule-repeated-task [name class count seconds & {:as options}]
+  (schedule-job
+   (create-job name class)
+   (apply create-trigger name
+	  (flatten
+	   (seq (assoc options
+		  :schedule (simple-schedule :repeat count :seconds seconds)
+		  :start (or (:start options) (java.util.Date.))))))))
+
+(defn schedule-cron-task [name class cron-expr & {:as options}]
+  (schedule-job
+   (apply create-job name class (flatten (seq (select-keys options :description))))
+   (apply create-trigger name
+	  (flatten (seq (assoc options
+		     :schedule (apply cron-schedule cron-expr (select-keys options :tz))))))))
 
 ;; macros for defining quartz jobs
 
-(defmacro defjob* [interface _class args & body]
-  (let [function-name (gensym (extract-function-name (str _class)))]
-    `(do
-       (gen-class
-        :name ~_class
-        :implements [~interface])
-       (defn- ~(symbol function-name) ~args
-         ~@body)
-       (defn ~(symbol (name _class) "-execute") [this# context#]
-         (~(symbol function-name) context#)))))
-
 (defmacro defjob [_class args & body]
-  `(defjob* org.quartz.Job ~_class ~args ~@body))
+  `(defrecord ~_class []
+     org.quartz.Job
+     (execute [this ~@args]
+	      ~@body)))
 
-(defmacro defstatefuljob [_class args & body]
-  `(defjob* org.quartz.StatefulJob ~_class ~args ~@body))
-
+       
 
