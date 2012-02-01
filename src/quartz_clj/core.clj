@@ -1,7 +1,7 @@
 (ns quartz-clj.core
   (:import [org.quartz JobBuilder]))
 
-(def ^:dynamic *scheduler* (atom nil))
+(defonce ^:dynamic *scheduler* (atom nil))
 
 ;; PRIVATE: Handle options
 
@@ -162,7 +162,7 @@
 	  (flatten (seq (assoc options
 		     :schedule (apply cron-schedule cron-expr (select-keys options :tz))))))))
 
-;; macros for defining quartz jobs
+;; Macros for defining quartz jobs
 
 (defmacro defjob [_class args & body]
   `(defrecord ~_class []
@@ -170,5 +170,46 @@
      (execute [this ~@args]
 	      ~@body)))
 
-       
+;; Listeners
 
+(defn add-listener
+  "Adds a listener class to the scheduler that is called
+   whenever the condition matches"
+  [listener matcher]
+  (let [mgr (.getListenerManager @*scheduler*)]
+    (.addJobListener mgr listener matcher)))
+
+(defn remove-listener
+  [name]
+  (let [mgr (.getListenerManager @*scheduler*)]
+    (.removeJobListener mgr name)))
+
+(defn match-on-job [name group]
+  (org.quartz.impl.matchers.KeyMatcher/keyEquals
+   (org.quartz.JobKey. name group)))
+
+(defn match-on-group [group]
+  (org.quartz.impl.matchers.GroupMatcher/groupEquals group))
+
+
+;; Example:
+;;
+;;(deflistener MyListener
+;;  (:executing [ctx] <body>)
+;;  (:vetoed [ctx] <body>)
+;;  (:executed [ctx except] <body>)
+
+(defmacro deflistener [_class & methods]
+  (letfn [(get-method [name] (first (filter #(= (first %) name) methods)))
+          (method-vars [name] (second (get-method name)))
+          (method-body [name] (nthrest (get-method name) 2))]
+    `(defrecord ~_class [~'name]
+       org.quartz.JobListener
+       (getName [~'this] (:name ~'this))
+       (jobToBeExecuted [~'this ~@(method-vars :executing)]
+         ~@(method-body :executing))
+       (jobExecutionVetoed [~'this ~@(method-vars :vetoed)]
+         ~@(method-body :vetoed))
+       (jobWasExecuted [~'this ~@(method-vars :executed)]
+         ~@(method-body :executed)
+         ))))
