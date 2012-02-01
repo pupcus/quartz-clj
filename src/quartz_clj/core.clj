@@ -1,34 +1,47 @@
 (ns quartz-clj.core
   (:import [org.quartz JobBuilder]))
 
+<<<<<<< HEAD
 (defonce ^:dynamic *scheduler* (atom nil))
+=======
+;;
+;; NOTE:
+;; on reload/recompile to reset *scheduler* to currently running scheduler run this at the repl:
+;;   (swap! *scheduler* (fn [old] (org.quartz.impl.StdSchedulerFactory/getDefaultScheduler)))
+;;
+(def ^:dynamic *scheduler* (atom nil))
+>>>>>>> mdp/master
 
 ;; PRIVATE: Handle options
+
+(defn- as-data-map [m]
+  (org.quartz.JobDataMap. m))
 
 (defn- configure-job [job [option value]]
   (case option
 	:recovery (.requestRecovery job value)
 	:durably (.storeDurably job value)
 	:description (.withDescription job value)
+        :datamap (.usingJobData job (as-data-map value)) ;; value as clojure hash-map
 	true (throw (java.lang.Error. (format "Unrecognized job option %s" option)))))
 
 
-(defn- configure-simple-schedule [sched [option value]]
+(defn- configure-simple-schedule [schedule [option value]]
   (case option
-	:repeat (.withRepeatCount sched value)
-	:hours (.withIntervalInHours sched value)
-	:minutes (.withIntervalInMinutes sched value)
-	:seconds (.withIntervalInSeconds sched value)
-	:forever (.repeatForever sched)
+	:repeat (.withRepeatCount schedule value)
+	:hours (.withIntervalInHours schedule value)
+	:minutes (.withIntervalInMinutes schedule value)
+	:seconds (.withIntervalInSeconds schedule value)
+	:forever (.repeatForever schedule)
 	true (throw (java.lang.Error. (format "Unrecognized schedule option %s" option)))))
 
-(defn- configure-trigger [trig [option value]]
+(defn- configure-trigger [trigger [option value]]
   (case option
-	:description (.withDescription trig value)
-	:priority (.withPriority trig value)
-	:schedule (.withSchedule trig value)
-	:start (.startAt trig value)
-	:end (.endAt trig value)
+	:description (.withDescription trigger value)
+	:priority (.withPriority trigger value)
+	:schedule (.withSchedule trigger value)
+	:start (.startAt trigger value)
+	:end (.endAt trigger value)
 	true (throw (java.lang.Error. (format "Unrecognized trigger option %s" option)))))
 
 (defn- as-clojure-key [key]
@@ -105,6 +118,9 @@
     (if-let [job-detail (.getJobDetail @*scheduler* key)]
       (.deleteJob @*scheduler* key))))
 
+(defn trigger [name]
+  (.getTrigger @*scheduler* (as-trigger-key name)))
+
 ;; PUBLIC: Low Level Public Interface
 
 (defn create-job [name class & {:as options}]
@@ -114,15 +130,15 @@
     (.build job)))
 
 (defn simple-schedule [& {:as options}]
-  (let [sched (org.quartz.SimpleScheduleBuilder/simpleSchedule)]
-    (dorun (map (partial configure-simple-schedule sched) options))
-    sched))
+  (let [schedule (org.quartz.SimpleScheduleBuilder/simpleSchedule)]
+    (dorun (map (partial configure-simple-schedule schedule) options))
+    schedule))
 
 (defn cron-schedule [expr & {:as options}]
-  (let [sched (org.quartz.CronScheduleBuilder/cronSchedule expr)]
+  (let [schedule (org.quartz.CronScheduleBuilder/cronSchedule expr)]
     (when-let [tz (:tz options)]
-      (.cronSchedule sched tz))
-    sched))
+      (.cronSchedule schedule tz))
+    schedule))
 
 (defn create-trigger [name & {:as options}]
   (let [trigger (org.quartz.TriggerBuilder/newTrigger)]
@@ -132,6 +148,16 @@
 
 (defn schedule-job [job trigger]
   (.scheduleJob @*scheduler* job trigger))
+
+(defn reschedule-job [job trigger]
+  (let [triggers (doto (.getTriggersOfJob @*scheduler* (.getKey job)) (.add trigger))]
+    (.scheduleJobs @*scheduler* (java.util.HashMap. {job triggers}) true)))
+
+(defn reset-data-map [job hash]
+  (doto job (.setJobDataMap (as-data-map hash))))
+
+(defn update-job [job]
+  (.addJob @*scheduler* job true))
 
 ;;
 ;; PUBLIC: High Level Interface (and examples of using low-level API)
@@ -145,7 +171,7 @@
 	   (seq (assoc options
 		  :schedule schedule
 		  :start (or (:start options) (java.util.Date.))))))))
-  
+
 (defn schedule-repeated-task [name class count seconds & {:as options}]
   (schedule-job
    (create-job name class)
@@ -160,7 +186,7 @@
    (apply create-job name class (flatten (seq (select-keys options :description))))
    (apply create-trigger name
 	  (flatten (seq (assoc options
-		     :schedule (apply cron-schedule cron-expr (select-keys options :tz))))))))
+                          :schedule (apply cron-schedule cron-expr (select-keys options :tz))))))))
 
 ;; Macros for defining quartz jobs
 
@@ -168,7 +194,26 @@
   `(defrecord ~_class []
      org.quartz.Job
      (execute [this ~@args]
-	      ~@body)))
+              ~@body)))
+
+;;
+;; WARNING:
+;; org.quartz.StatefulJob is a deprecated interface in 2.x
+;; to make a quartz job stateful it is best to apply the
+;; @DisallowConcurrentExecution annotation BUT we can't do that in
+;; clojure :-(
+;;
+;; the interface IS still around and is our only option at the moment
+;; this macro could go away in the future and pin you to a particular
+;; version of this library.
+;;
+
+(defmacro defstatefuljob [_class args & body]
+  `(defrecord ~_class []
+     org.quartz.StatefulJob
+     (execute [this ~@args]
+              ~@body)))
+
 
 ;; Listeners
 
