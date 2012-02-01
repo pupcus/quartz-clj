@@ -1,16 +1,12 @@
 (ns quartz-clj.core
   (:import [org.quartz JobBuilder]))
 
-<<<<<<< HEAD
-(defonce ^:dynamic *scheduler* (atom nil))
-=======
 ;;
 ;; NOTE:
 ;; on reload/recompile to reset *scheduler* to currently running scheduler run this at the repl:
 ;;   (swap! *scheduler* (fn [old] (org.quartz.impl.StdSchedulerFactory/getDefaultScheduler)))
-;;
-(def ^:dynamic *scheduler* (atom nil))
->>>>>>> mdp/master
+;; ISE: use defonce to make the above statement unnecessary
+(defonce ^:dynamic *scheduler* (atom nil))
 
 ;; PRIVATE: Handle options
 
