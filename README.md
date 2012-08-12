@@ -13,6 +13,21 @@ building the project
 usage
 -----
 
+This is now deployed on clojars
+
+For lein
+
+    [quartz-clj "0.0.3"]
+
+For maven
+
+    <dependency>
+        <groupId>quartz-clj</groupId>
+        <artifactId>quartz-clj</artifactId>
+        <version>0.0.3</version>
+    </dependency>
+
+
 TODO: more examples
 
     ;; loading the library
