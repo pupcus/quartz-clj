@@ -69,7 +69,7 @@
     <maven-compiler-plugin-version>2.0.2</maven-compiler-plugin-version>
     <maven-resources-plugin-version>2.4</maven-resources-plugin-version>
     <maven-surefire-plugin-version>2.4.3</maven-surefire-plugin-version>
-    <maven-release-plugin-version>2.0-beta9</maven-release-plugin-version>
+    <maven-release-plugin-version>2.0-beta-9</maven-release-plugin-version>
     <lifecycle-mapping-version>1.0.0</lifecycle-mapping-version>
   </properties>
   
