@@ -1,14 +1,17 @@
-# quartz-clj
+quartz-clj
+==========
 
 clojure utils/tools for starting/manipulating quartz tasks
 
 This code started out as a demonstration for a colleague of how useful clojure could be when the need to interop with java libraries arose.  We use quartz quite a bit in our java code and I thought the way clojure allows a very dynamic approach to the quartz runtime as well as the ease with which jobs/tasks could be created and manipulated would impress.  It did not.  Unfortunately, in the end s/he does not like clojure (yet ;-) ).  Then, some time later, Ian Eslick took the orignal code and vastly improved it (much thanks to him for both his interest and his energy).  And that is where things are at the moment. If you have any suggestions or find any issues please let me know. Enjoy.
 
-## building
+building the project
+--------------------
 
-   lein deps; lein install
+   mvn clean ; mvn
 
-## usage
+usage
+-----
 
 TODO: more examples
 
@@ -41,13 +44,15 @@ which put .class files in the classes directory.  THEN things started working.  
 
 TODO:  examples of setting things up to work with a jdbc datastore
 
-## contributors
+contributors
+------------
 
 Ian Eslick  Many thanks to Ian for his work on the code base.
   
-## License
+License
+-------
 
-Copyright (C) 2011 pupcus
+Copyright (c) pupcus.org
 
 Distributed under the Eclipse Public License, the same as Clojure.
 
