@@ -8,30 +8,30 @@ This code started out as a demonstration for a colleague of how useful clojure c
 building the project
 --------------------
 
-   mvn clean ; mvn
+    mvn clean ; mvn
 
 usage
 -----
 
 TODO: more examples
 
-   ;; loading the library
+    ;; loading the library
 
-   (require '[quartz-clj.core :as qcore] :reload-all :verbose)
+    (require '[quartz-clj.core :as qcore] :reload-all :verbose)
 
-   ;; start the schduler
+    ;; start the schduler
 
-   (qcore/start)
+    (qcore/start)
 
-   ;; define the job to execute when the trigger fires
+    ;; define the job to execute when the trigger fires
 
-   (qcore/defjob TestJob [context]
-     (let [jobId (.get (.getJobDataMap (.getJobDetail context)) "jobId")]
-       (println (format "A quartz task with jobId=[%s]" jobId))))
+    (qcore/defjob TestJob [context]
+      (let [jobId (.get (.getJobDataMap (.getJobDetail context)) "jobId")]
+        (println (format "A quartz task with jobId=[%s]" jobId))))
 
-   ;; schedule the job
+    ;; schedule the job
 
-   (qcore/schedule-job (qcore/create-job "test-job" user.TestJob :datamap {"jobId" 1})
+    (qcore/schedule-job (qcore/create-job "test-job" user.TestJob :datamap {"jobId" 1})
                        (qcore/create-trigger "test-trigger" :schedule (qcore/create-schedule "test-schedule" :repeat 10 :seconds 2)))
 
 you should see the TestJob firing every 2 seconds for 10 executions.
