@@ -133,7 +133,7 @@
 (defn cron-schedule [expr & {:as options}]
   (let [schedule (org.quartz.CronScheduleBuilder/cronSchedule expr)]
     (when-let [tz (:tz options)]
-      (.cronSchedule schedule tz))
+      (.inTimeZone schedule (java.util.TimeZone/getTimeZone tz)))
     schedule))
 
 (defn create-trigger [name & {:as options}]
