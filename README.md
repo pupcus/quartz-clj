@@ -5,6 +5,8 @@ clojure utils/tools for starting/manipulating quartz tasks
 
 This code started out as a demonstration for a colleague of how useful clojure could be when the need to interop with java libraries arose.  We use quartz quite a bit in our java code and I thought the way clojure allows a very dynamic approach to the quartz runtime as well as the ease with which jobs/tasks could be created and manipulated would impress.  It did not.  Unfortunately, in the end s/he does not like clojure (yet ;-) ).  Then, some time later, Ian Eslick took the orignal code and vastly improved it (much thanks to him for both his interest and his energy).  And that is where things are at the moment. If you have any suggestions or find any issues please let me know. Enjoy.
 
+[![Clojars Project](https://img.shields.io/clojars/v/quartz-clj.svg)](https://clojars.org/quartz-clj)
+
 building the project
 --------------------
 
@@ -12,23 +14,6 @@ building the project
 
 usage
 -----
-
-This is now deployed on clojars
-
-For lein
-
-    [quartz-clj "0.0.3"]
-
-For maven
-
-    <dependency>
-        <groupId>quartz-clj</groupId>
-        <artifactId>quartz-clj</artifactId>
-        <version>0.0.3</version>
-    </dependency>
-
-
-TODO: more examples
 
     ;; loading the library
 
